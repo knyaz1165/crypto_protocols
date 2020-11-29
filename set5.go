@@ -1,7 +1,6 @@
 package cryptopals
 
 import (
-//     "fmt"
     "math/big"
     "crypto/rand"
     "crypto/aes"
@@ -17,11 +16,6 @@ type DiffieHellman struct {
 }
 
 func (dh *DiffieHellman) get_public_key() *big.Int {
-    privat_key, err := rand.Int(rand.Reader, dh.p)
-    if err != nil{
-        log.Fatal()
-    }
-    dh.secret_key = privat_key
     public_key := new(big.Int).Exp(dh.g, dh.secret_key, dh.p)
     return public_key
 }
@@ -58,7 +52,10 @@ func pkcs7_padding(data []byte, block_size int) []byte {
 }
 
 func pkcs7_unpad(data []byte) []byte {
-    return data[:len(data) - int(data[len(data) - 1])]
+    if int(data[len(data) - 1]) > 0 && int(data[len(data) - 1]) < 16{
+        return data[:len(data) - int(data[len(data) - 1])]
+    }
+    return data
 }
 
 func aes_ecb_encrypt(data, key []byte) []byte {
@@ -167,7 +164,6 @@ func parameter_injection_attack(alice DiffieHellman, bob DiffieHellman) bool {
     a_iv := []byte(cyphertext_for_bob[len(cyphertext_for_bob) - 16:])
     
     //Боб расшифровывает
-//     message_from_alice := []byte(cyphertext_for_bob)
     message_from_alice := aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), bob_key, a_iv)
     
     bob_iv := make([]byte, 16)
@@ -186,4 +182,69 @@ func parameter_injection_attack(alice DiffieHellman, bob DiffieHellman) bool {
     
     return hacked_msg_alice == hacked_msg_bob
     
+}
+
+func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
+    result := false
+    
+    p := alice.p
+    g := alice.g
+    
+    B := bob.get_public_key()
+    
+    alice_message := []byte("Hello, Bob! How are you today? What are you doing?")
+    
+    sum := sha1.Sum(alice.get_shared_secret_key(B).Bytes())
+    alice_key := sum[:16]
+    
+    var alice_iv = make([]byte, 16)
+    rand.Read(alice_iv)
+    alice_cipher := aes_cbc_encrypt(alice_message, alice_key, alice_iv)
+    
+    //Алиса отправляет cyphertext_for_bob
+    cyphertext_for_bob := string(alice_cipher) + string(alice_iv)
+    
+    mitm_iv_alice := []byte(cyphertext_for_bob[len(cyphertext_for_bob) - 16:])
+    
+    //При g=1 общий секрет Алисы и Боба будет = 1
+    if g == big1 {
+        mitm_key := sha1.Sum(big.NewInt(1).Bytes())
+        hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
+        
+        if hacked_msg_alice == string(alice_message){
+            result = true
+        }
+    }
+    
+    //При g=p общий секрет АЛисы и Боба будет = 0
+    if g == p {
+        mitm_key := sha1.Sum(big.NewInt(0).Bytes())
+        hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
+
+        if hacked_msg_alice == string(alice_message){
+            result = true
+        }
+    }
+    
+    // При g=p-1 общий секрет АЛисы и Боба будет = либо 1
+    if g == pminus1 {
+        mitm_key := sha1.Sum(big1.Bytes())
+        hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
+
+        if hacked_msg_alice == string(alice_message){
+            result = true
+        }
+        
+        //либо -1
+        if result == false {
+            mitm_key := sha1.Sum(pminus1.Bytes())
+            hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
+
+            if hacked_msg_alice == string(alice_message){
+                result = true
+            }
+        }
+    }
+    
+    return result
 }
