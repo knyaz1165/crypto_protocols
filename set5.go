@@ -171,7 +171,7 @@ func parameter_injection_attack(alice DiffieHellman, bob DiffieHellman) bool {
     
     msg_for_alice := string(aes_cbc_encrypt(message_from_alice, bob_key, bob_iv)) + string(bob_iv)
     
-    
+    //При A=B=p общий секрет Алисы и Боба будет = 0
     mitm_key := sha1.Sum(big.NewInt(0).Bytes())
     mitm_iv_alice := []byte(cyphertext_for_bob[len(cyphertext_for_bob) - 16:])
     hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
@@ -185,7 +185,6 @@ func parameter_injection_attack(alice DiffieHellman, bob DiffieHellman) bool {
 }
 
 func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
-    result := false
     
     p := alice.p
     g := alice.g
@@ -208,11 +207,11 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
     
     //При g=1 общий секрет Алисы и Боба будет = 1
     if g == big1 {
-        mitm_key := sha1.Sum(big.NewInt(1).Bytes())
+        mitm_key := sha1.Sum(big1.Bytes())
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
         
         if hacked_msg_alice == string(alice_message){
-            result = true
+            return true
         }
     }
     
@@ -222,7 +221,7 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
 
         if hacked_msg_alice == string(alice_message){
-            result = true
+            return true
         }
     }
     
@@ -232,19 +231,17 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
 
         if hacked_msg_alice == string(alice_message){
-            result = true
+            return true
         }
         
         //либо -1
-        if result == false {
-            mitm_key := sha1.Sum(pminus1.Bytes())
-            hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
+        mitm_key = sha1.Sum(pminus1.Bytes())
+        hacked_msg_alice = string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
 
-            if hacked_msg_alice == string(alice_message){
-                result = true
-            }
+        if hacked_msg_alice == string(alice_message){
+            return true
         }
     }
     
-    return result
+    return false
 }
