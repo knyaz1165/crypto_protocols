@@ -4,165 +4,211 @@ import (
     "math"
     "math/big"
     "crypto/rand"
-    "github.com/ghhenry/intfact"
-    "crypto/sha1"
+    "crypto/sha256"
+    "crypto/hmac"
 )
-
-var default_P, _ =  new(big.Int).SetString("7199773997391911030609999317773941274322764333428698921736339643928346453700085358802973900485592910475480089726140708102474957429903531369589969318716771", 10)
-var default_G, _ =  new(big.Int).SetString("4565356397095740655436854503483826832136106141639563487732438195343690437606117828318042418238184896212352329118608100083187535033402010599512641674644143", 10)
-var q, _ = new(big.Int).SetString("236234353446506858198510045061214171961", 10)
-
-var alice_secret,_ = rand.Int(rand.Reader, q)
-var bob_secret,_ = rand.Int(rand.Reader, q)
 
 var big0 = big.NewInt(0)
 
-		
+func Factorize(n *big.Int, upperBound *big.Int) []*big.Int {
+	factors := make([]*big.Int, 0)
 
-type factor struct {
-	fact *big.Int
-	exp  int64
-}
+	i := new(big.Int).Set(big2)
+	tmp := new(big.Int)
+	newN := new(big.Int).Set(n)
 
-func factorize(n *big.Int) []factor {
-	factors := make([]factor, 0)
-	l := intfact.NewFactors(n)
-	l.TrialDivision(math.MaxUint32)
-	for p := l.First; p != nil; p = p.Next {
-		factors = append(factors, factor{
-			p.Fac, int64(p.Exp),
-		})
+	for {
+		tmp.Mod(newN, i)
+
+		if tmp.Cmp(big0) == 0 {
+			factors = append(factors, new(big.Int).Set(i))
+			for tmp.Mod(newN, i).Cmp(big0) == 0 {
+				newN.Set(tmp.Div(newN, i))
+			}
+		}
+
+		if newN.Cmp(big1) == 0 {
+			break
+		}
+
+		if i.Cmp(upperBound) >= 0 {
+			break
+		}
+
+		i.Add(i, big1)
 	}
+
 	return factors
 }
 
+func MAC(key []byte, msg []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(msg)
+	return mac.Sum(nil)
+}
 
-func MAC(K *big.Int,m string) []byte{
-    var b = 64
-    var ipad = ""
-    var opad = ""
-    var zero = ""
-    var key string
-    for i:=0;i<b;i++{
-        ipad = ipad + "54"
-        opad = opad + "92"
-        if i<44{
-            zero = zero + "0"
-        }
+func Chinese_Remainder_Theorem(bi, ri[]*big.Int) (n, r *big.Int){
+    r = new(big.Int).Set(big1)
+    
+    for i:=0; i<len(ri); i++{
+        r = new(big.Int).Mul(r,ri[i])
     }
     
-    var s0 []byte = K.Bytes()
-    if len(s0) != b{
-        q := sha1.Sum(s0)
-        key = string(q[:]) + zero
-    }else {
-        key = string(K.Bytes())
+    var mi,yi []*big.Int
+    
+    for i:=0; i<len(ri); i++ {
+        mi = append(mi, new(big.Int).Div(r,ri[i]))
     }
     
-    ikeypad := xor([]byte(key),[]byte(ipad))
-    k_ipad := string(ikeypad) + m
-    q := sha1.Sum([]byte(k_ipad))
-    okeypad := string(xor([]byte(key),[]byte(opad))) + string(q[:])
-    q = sha1.Sum([]byte(okeypad))
+
+    for i:=0; i<len(mi); i++{
+        e := new(big.Int).Sub(ri[i], big2)
+        yi = append(yi, new(big.Int).Exp(mi[i],e,ri[i]))
+    }
+
     
-    return q[:]
+    n = big0
+    for i:=0; i<len(mi); i++{
+        e := new(big.Int).Mul(mi[i],yi[i])
+        d := new(big.Int).Mul(bi[i], e)
+        n = new(big.Int).Add(n,d)
+    }
+        
+
+    n = new(big.Int).Mod(n, r)
+    
+    return n,r
 }
 
 
-func subgroup_confinement_attacks(alice DiffieHellman,bob DiffieHellman) *big.Int{
-    pminus1 := new(big.Int).Sub(default_P, big1)
-//     j := new(big.Int).Div(pminus1,big1)
-     var gotFactors = []factor{
- 			{big.NewInt(2), 1},
- 			{big.NewInt(3), 2},
- 			{big.NewInt(5), 1},
- 			{big.NewInt(109), 1},
- 			{big.NewInt(7963), 1},
- 			{big.NewInt(8539), 1},
- 			{big.NewInt(20641), 1},
- 			{big.NewInt(38833), 1},
- 			{big.NewInt(39341), 1},
- 			{big.NewInt(46337), 1},
- 			{big.NewInt(51977), 1},
- 			{big.NewInt(54319), 1},
- 			{big.NewInt(57529), 1},
-			{big.NewInt(96142199), 1},
-     }
-    
-//     gotFactors := factorize(j)
-    m := "crazy flamboyant for the rap enjoyment"
+func DHSmallSubgroupAttack(p, cofactor, q *big.Int, bob DiffieHellman) (n,r *big.Int){
+    pminus1 := new(big.Int).Sub(p, big1)
+    gotFactors := Factorize(cofactor, big.NewInt(1<<16))
+
+    m := []byte("crazy flamboyant for the rap enjoyment")
     var h *big.Int
-    flag := true
-    var t []byte
-    var bi = []factor{}
-    var ri = []factor{}
-    var mul = big1
+    var bi, ri []*big.Int
     
-    for i:=0; i<len(gotFactors) && flag == true && mul.Cmp(q) != 1;  i++{
+    for i:=0; i<len(gotFactors);  i++{
         var l *big.Int
-        var r  = gotFactors[i].fact
-        var f = false
-        for f!=true{
-            var random, _ = rand.Int(rand.Reader, default_P)
-            var degree = new(big.Int).Div(pminus1,r)
-            h = new(big.Int).Exp(random, degree, default_P)
+        var mod  = gotFactors[i]
+
+        for true{
+            var random, _ = rand.Int(rand.Reader, p)
+            var degree = new(big.Int).Div(pminus1,mod)
+            h = new(big.Int).Exp(random, degree, p)
             
             if h.Cmp(big1) != 0{
-                f = true
+                break
             }
         }
         K := bob.get_shared_secret_key(h)
-        t = MAC(K,m)
+        t := MAC(K.Bytes(),m)
         
         var key *big.Int
-        for l=big2; l.Cmp(r) != 0; {
-            
-            key = new(big.Int).Exp(h, l, default_P)
-            mac := MAC(key,m)
-            
-            if string(mac) == string(t) {
-                bi = append(bi, factor{
-                l,1})
-                ri = append(ri, factor{
-                r,1})
-                mul = new(big.Int).Mul(mul,r)
+        for l=big1; l.Cmp(mod) <= 0; l = new(big.Int).Add(l, big1){
+            key = new(big.Int).Exp(h, l, p)
+            mac := MAC(key.Bytes(),m)
+            if string(t) == string(mac) {
+                bi = append(bi, l)
+                ri = append(ri, mod)
                 break
             }
-
-            l=new(big.Int).Add(l, big1)
-            
         }
-        
-    }
-    
-    var M0 = mul
-    var mi = []factor{}
-    var yi = []factor{}
-    
-    for i:=0; i<len(ri); i++ {
-        mi = append(mi, factor{new(big.Int).Div(M0,ri[i].fact),1})
-    }
-    
-
-    for i:=0; i<len(mi); i++{
-        e := new(big.Int).Sub(ri[i].fact, big2)
-        yi = append(yi, factor{new(big.Int).Exp(mi[i].fact,e,ri[i].fact),1})
     }
 
+    n,r = Chinese_Remainder_Theorem(bi,ri)
     
-    var x *big.Int = big0
-    for i:=0; i<len(mi); i++{
-        e := new(big.Int).Mul(mi[i].fact,yi[i].fact)
-        d := new(big.Int).Mul(bi[i].fact, e)
-        x = new(big.Int).Add(x,d)
-    }
-        
+    return n,r
+}
 
-    x = new(big.Int).Exp(x, big1, M0)
-    return x
+func f(y, k, p *big.Int) *big.Int {
+	// f = 2^(y mod k) mod p
+	return new(big.Int).Exp(big2, new(big.Int).Mod(y, k), p)
+}
+
+func calcN(p, k *big.Int) *big.Int {
+	N := new(big.Int).Set(big0)
+
+	for i := new(big.Int).Set(big0); i.Cmp(k) < 0; i.Add(i, big1) {
+		N.Add(N, f(i, k, p))
+	}
+
+	N.Div(N, k)
+
+	// see for details: tasks/challenge58.txt:99
+	return N.Mul(big.NewInt(4), N)
+}
+
+func calcK(a, b *big.Int) *big.Int {
+	// k = log2(sqrt(b-a)) + log2(log2(sqrt(b-a))) - 2
+	sqrtba := math.Sqrt(float64(new(big.Int).Sub(b, a).Uint64()))
+	logSqrt := math.Log2(sqrtba)
+	logLogSqrt := math.Log2(logSqrt)
+    if new(big.Int).SetUint64(uint64(logSqrt + logLogSqrt - 2)).Cmp(big0) == 0{
+        return big.NewInt(11)
+    }
+	return new(big.Int).SetUint64(uint64(logSqrt + logLogSqrt - 2))
 }
     
     
+func catchKangaroo(p, g, y, a, b *big.Int) *big.Int{
+    
+    var k = calcK(a,b)
+
+    xT := new(big.Int).Set(big0)
+    yT := new(big.Int).Exp(g, b, p)
+    e1 := new(big.Int).Set(big0)
+    
+    N := calcN(p,k)
+    
+    for i:=new(big.Int).Set(big0); i.Cmp(N)<0; i = new(big.Int).Add(i, big1) {
+        xT = new(big.Int).Add(xT, f(yT,k,p))
+        e1 = new(big.Int).Exp(g,f(yT,k,p), p)
+        yT = new(big.Int).Mod(new(big.Int).Mul(yT, e1), p)        
+        
+    }
+    
+    xW := new(big.Int).Set(big0)
+    yW := new(big.Int).Set(y)
+    e1 = new(big.Int).Add(b, xT)
+    
+    for ;xW.Cmp(e1) == -1;{
+        xW = new(big.Int).Add(xW, f(yW,k,p))
+        yW = new(big.Int).Mul(yW, new(big.Int).Exp(g,f(yW,k,p),p))
+        yW = new(big.Int).Mod(yW, p)
+        if yW.Cmp(yT) == 0{
+            break
+        }
+    }
+    
+    if xW.Cmp(e1) != -1{
+        return big.NewInt(0)
+    }else {
+		return new(big.Int).Sub(e1, xW)
+	}
+}
+
+func DHKangarooAttack(p, g *big.Int, q, cofactor *big.Int,bob DiffieHellman) *big.Int{
+    
+    y := new(big.Int).Exp(g,bob.secret_key,p)
+
+    n,r := DHSmallSubgroupAttack(p,cofactor,q,bob)
+    
+	b := new(big.Int).Div(new(big.Int).Sub(q,big1),r)
+    tmp := new(big.Int)
+
+    // y' = y * g^-n
+	y_s := new(big.Int).Mod(tmp.Mul(y, tmp.Exp(g, tmp.Neg(n), p)), p)
+
+	// g' = g^r
+	g_s := new(big.Int).Exp(g, r, p)
+
+	m := catchKangaroo(p,g_s,y_s,big0,b)
+    x := new(big.Int).Add(n,new(big.Int).Mul(r,m))
+
+    return x
+}
 
 
 
