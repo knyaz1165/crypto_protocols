@@ -7,6 +7,11 @@ import (
 	"sync"
 )
 
+var big0 = big.NewInt(0)
+var big1 = big.NewInt(1)
+var big2 = big.NewInt(2)
+var big3 = big.NewInt(3)
+
 // A Curve represents a short-form Weierstrass curve y^2 = x^3 + a*x + b.
 type Curve interface {
 	// Params returns the parameters for the curve.
