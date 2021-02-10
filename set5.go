@@ -206,7 +206,7 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
     mitm_iv_alice := []byte(cyphertext_for_bob[len(cyphertext_for_bob) - 16:])
     
     //При g=1 общий секрет Алисы и Боба будет = 1
-    if g == big1 {
+    if g.Cmp(big1) == 0 {
         mitm_key := sha1.Sum(big1.Bytes())
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
         
@@ -216,7 +216,7 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
     }
     
     //При g=p общий секрет АЛисы и Боба будет = 0
-    if g == p {
+    if g.Cmp(p) == 0 {
         mitm_key := sha1.Sum(big.NewInt(0).Bytes())
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
 
@@ -226,7 +226,7 @@ func malicious_g_attack(alice DiffieHellman, bob DiffieHellman) bool{
     }
     
     // При g=p-1 общий секрет АЛисы и Боба будет = либо 1
-    if g == pminus1 {
+    if g.Cmp(pminus1) == 0 {
         mitm_key := sha1.Sum(big1.Bytes())
         hacked_msg_alice := string(aes_cbc_decrypt([]byte(cyphertext_for_bob[:len(cyphertext_for_bob) - 16]), mitm_key[:16], mitm_iv_alice))
 

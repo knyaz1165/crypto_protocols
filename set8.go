@@ -10,6 +10,10 @@ import (
 
 var big0 = big.NewInt(0)
 
+const (
+	msg = "crazy flamboyant for the rap enjoyment"
+)
+
 func Factorize(n *big.Int, upperBound *big.Int) []*big.Int {
 	factors := make([]*big.Int, 0)
 
@@ -41,9 +45,9 @@ func Factorize(n *big.Int, upperBound *big.Int) []*big.Int {
 	return factors
 }
 
-func MAC(key []byte, msg []byte) []byte {
+func MAC(key []byte) []byte {
 	mac := hmac.New(sha256.New, key)
-	mac.Write(msg)
+	mac.Write([]byte(msg))
 	return mac.Sum(nil)
 }
 
@@ -85,7 +89,6 @@ func DHSmallSubgroupAttack(p, cofactor, q *big.Int, bob DiffieHellman) (n,r *big
     pminus1 := new(big.Int).Sub(p, big1)
     gotFactors := Factorize(cofactor, big.NewInt(1<<16))
 
-    m := []byte("crazy flamboyant for the rap enjoyment")
     var h *big.Int
     var bi, ri []*big.Int
     
@@ -103,12 +106,12 @@ func DHSmallSubgroupAttack(p, cofactor, q *big.Int, bob DiffieHellman) (n,r *big
             }
         }
         K := bob.get_shared_secret_key(h)
-        t := MAC(K.Bytes(),m)
+        t := MAC(K.Bytes())
         
         var key *big.Int
         for l=big1; l.Cmp(mod) <= 0; l = new(big.Int).Add(l, big1){
             key = new(big.Int).Exp(h, l, p)
-            mac := MAC(key.Bytes(),m)
+            mac := MAC(key.Bytes())
             if string(t) == string(mac) {
                 bi = append(bi, l)
                 ri = append(ri, mod)
@@ -209,6 +212,3 @@ func DHKangarooAttack(p, g *big.Int, q, cofactor *big.Int,bob DiffieHellman) *bi
 
     return x
 }
-
-
-
