@@ -6,6 +6,7 @@ import (
     "crypto/aes"
     "crypto/sha1"
     "log"
+    "github.com/knyaz1165/cryptopals/elliptic"
 )
 
 

@@ -7,11 +7,6 @@ import (
 	"sync"
 )
 
-var big0 = big.NewInt(0)
-var big1 = big.NewInt(1)
-var big2 = big.NewInt(2)
-var big3 = big.NewInt(3)
-
 // A Curve represents a short-form Weierstrass curve y^2 = x^3 + a*x + b.
 type Curve interface {
 	// Params returns the parameters for the curve.
@@ -47,7 +42,7 @@ func (curve *CurveParams) Params() *CurveParams {
 
 func (curve *CurveParams) IsOnCurve(x,y *big.Int) bool {
     // y^2 = x^3 + ax + b
-    left := new(big.Int).Exp(y,big2,curve.P)
+    left := new(big.Int).Exp(y,big.NewInt(2),curve.P)
     right := new(big.Int).Mod(new(big.Int).Add(curve.B,new(big.Int).Add(new(big.Int).Mul(curve.A,x),new(big.Int).Exp(x,big.NewInt(3),curve.P))),curve.P)
     return left.Cmp(right) == 0
 }
@@ -57,32 +52,32 @@ func (curve *CurveParams) IsOnCurve(x,y *big.Int) bool {
 func (curve *CurveParams) Add(x1, y1, x2, y2 *big.Int) (x, y *big.Int) {
 	// https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Point_addition
 
-	if x1.Cmp(big0) == 0 && y1.Cmp(big0) == 0 {
+	if x1.Cmp(big.NewInt(0)) == 0 && y1.Cmp(big.NewInt(0)) == 0 {
 		return x2, y2
 	}
 
-	if x2.Cmp(big0) == 0 && y2.Cmp(big0) == 0 {
+	if x2.Cmp(big.NewInt(0)) == 0 && y2.Cmp(big.NewInt(0)) == 0 {
 		return x1, y1
 	}
 
 	ix, iy := Inverse(curve, x2, y2)
 	if x1.Cmp(ix) == 0 && y1.Cmp(iy) == 0 {
-		return new(big.Int).Set(big0), new(big.Int).Set(big0)
+		return new(big.Int).Set(big.NewInt(0)), new(big.Int).Set(big.NewInt(0))
 	}
 
 	var m = new(big.Int)
     var tmp = new(big.Int)
 	
 	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
-        tmp.Mul(big2,y1).ModInverse(tmp,curve.P)
-        m.Exp(x1,big2,curve.P).Mul(m,big3).Add(m,curve.A).Mul(m,tmp).Mod(m,curve.P)
+        tmp.Mul(big.NewInt(2),y1).ModInverse(tmp,curve.P)
+        m.Exp(x1,big.NewInt(2),curve.P).Mul(m,big.NewInt(3)).Add(m,curve.A).Mul(m,tmp).Mod(m,curve.P)
     }else{
         tmp.Sub(x2, x1).ModInverse(tmp, curve.P)
 		m.Sub(y2, y1).Mul(m, tmp).Mod(m, curve.P)
     }
 
 	tmp.Add(x1, x2).Neg(tmp).Mod(tmp, curve.P)
-	x3 := new(big.Int).Exp(m, big2, curve.P)
+	x3 := new(big.Int).Exp(m, big.NewInt(2), curve.P)
 	x3.Add(x3, tmp).Mod(x3, curve.P)
 
 	tmp.Sub(x1, x3).Mod(tmp, curve.P)
@@ -99,8 +94,8 @@ func (curve *CurveParams) Double(x1, y1 *big.Int) (x, y *big.Int) {
 func (curve *CurveParams) ScalarMult(xIn, yIn *big.Int, k []byte) (x, y *big.Int) {
 	// https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Double-and-add
 
-	x = new(big.Int).Set(big0)
-	y = new(big.Int).Set(big0)
+	x = new(big.Int).Set(big.NewInt(0))
+	y = new(big.Int).Set(big.NewInt(0))
 
 	if len(k) == 0 {
 		return
@@ -113,8 +108,8 @@ func (curve *CurveParams) ScalarMult(xIn, yIn *big.Int, k []byte) (x, y *big.Int
 
 	tmp := new(big.Int)
 
-	for bigK.Cmp(big0) != 0 {
-		if tmp.And(bigK, big1).Cmp(big1) == 0 {
+	for bigK.Cmp(big.NewInt(0)) != 0 {
+		if tmp.And(bigK, big.NewInt(1)).Cmp(big.NewInt(1)) == 0 {
 			x, y = curve.Add(x, y, pointX, pointY)
 		}
 
