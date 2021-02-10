@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"math/big"
 	"testing"
+    
+    "github.com/knyaz1165/cryptopals/elliptic"
 )
 
 type kangarooTest struct {
@@ -78,4 +80,17 @@ func Test_58(t *testing.T) {
 		t.Fatalf("%s: wrong private key was found in the sugbroup attack", t.Name())
 	}
 	fmt.Printf("%s: Found key: %d\n", t.Name(), x)
+}
+
+func Test_59(t *testing.T) {
+	p128 := elliptic.P128()
+
+	oracle, isKeyCorrect, _ := NewECDHAttackOracle(p128)
+
+	privateKey := InvalidCurveAttack(oracle)
+	t.Logf("%s: Private key: %d\n", t.Name(), privateKey)
+
+	if !isKeyCorrect(privateKey.Bytes()) {
+		t.Fatalf("%s: wrong private key was found in the invalid curve attack\n", t.Name())
+	}
 }

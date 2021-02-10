@@ -1,11 +1,14 @@
 package cryptopals
 
 import (
+    "bytes"
     "math"
     "math/big"
     "crypto/rand"
     "crypto/sha256"
     "crypto/hmac"
+    
+    "github.com/knyaz1165/cryptopals/elliptic"
 )
 
 var big0 = big.NewInt(0)
@@ -13,6 +16,77 @@ var big0 = big.NewInt(0)
 const (
 	msg = "crazy flamboyant for the rap enjoyment"
 )
+
+// pickRandomPoint picks a random point on given curve
+func pickRandomPoint(curve elliptic.Curve, order *big.Int) (x *big.Int, y *big.Int) {
+	k := new(big.Int).Div(curve.Params().N, order).Bytes()
+
+	for {
+		x, y = elliptic.GeneratePoint(curve)
+		x, y = curve.ScalarMult(x, y, k)
+
+		if x.Cmp(big0) == 0 && y.Cmp(big0) == 0 {
+			continue
+		}
+
+		return
+	}
+}
+
+// ecdh performs DH with given curve, public and private keys
+func ecdh(curve elliptic.Curve, x *big.Int, y *big.Int, privateKey []byte) []byte {
+	ssx, ssy := curve.ScalarMult(x, y, privateKey)
+	return MAC(elliptic.Marshal(curve, ssx, ssy))
+}
+
+// checkDuplicate returns true if no duplicates were found
+func checkDuplicate(reminders []*big.Int, modules []*big.Int, r *big.Int, m *big.Int) bool {
+	if len(reminders) != len(modules) {
+		panic("checkDuplicate: len(reminders) != len(modules)")
+	}
+
+	ok := true
+
+	for i := 0; i < len(reminders); i++ {
+		if reminders[i].Cmp(r) == 0 && modules[i].Cmp(m) == 0 {
+			ok = false
+			break
+		}
+	}
+
+	return ok
+}
+
+func NewECDHAttackOracle(curve elliptic.Curve) (
+	ecdh func(x, y *big.Int) []byte,
+	isKeyCorrect func([]byte) bool,
+	getPublicKey func() (x, y *big.Int),
+) {
+	privateKey, x, y, err := elliptic.GenerateKey(curve, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	ecdh = func(x, y *big.Int) []byte {
+		sx, sy := curve.ScalarMult(x, y, privateKey)
+		return MAC(elliptic.Marshal(curve, sx, sy))
+	}
+
+	isKeyCorrect = func(key []byte) bool {
+		i := 0
+		for i < len(privateKey) && privateKey[i] == 0 {
+			i++
+		}
+
+		return bytes.Equal(privateKey[i:], key)
+	}
+
+	getPublicKey = func() (*big.Int, *big.Int) {
+		return x, y
+	}
+
+	return
+}
 
 func Factorize(n *big.Int, upperBound *big.Int) []*big.Int {
 	factors := make([]*big.Int, 0)
@@ -211,4 +285,38 @@ func DHKangarooAttack(p, g *big.Int, q, cofactor *big.Int,bob DiffieHellman) *bi
     x := new(big.Int).Add(n,new(big.Int).Mul(r,m))
 
     return x
+}
+
+func InvalidCurveAttack(oracleECDH func(x, y *big.Int) []byte) *big.Int {
+	invalidCurves := []elliptic.Curve{elliptic.P128V1(), elliptic.P128V2(), elliptic.P128V3()}
+
+	var modules, remainders []*big.Int
+
+	for _, curve := range invalidCurves {
+		factors := Factorize(curve.Params().N, big.NewInt(1<<16))
+		
+		if factors[0].Cmp(big2) == 0 {
+			factors = factors[1:]
+		}
+
+		for _, factor := range factors {
+			x, y := pickRandomPoint(curve, factor)
+
+			ss := oracleECDH(x, y)
+
+			for k := big.NewInt(1); k.Cmp(factor) <= 0; k.Add(k, big1) {
+				ss1 := ecdh(curve, x, y, k.Bytes())
+
+				if hmac.Equal(ss, ss1) && checkDuplicate(remainders, modules, k, factor) {
+					remainders = append(remainders, new(big.Int).Set(k))
+					modules = append(modules, factor)
+					break
+				}
+			}
+		}
+	}
+
+	x, _ := Chinese_Remainder_Theorem(remainders, modules)
+
+	return x
 }
